@@ -275,7 +275,7 @@ func getNextToken(query string, t token) token {
 	}
 
 	// Number
-	re = regexp.MustCompile("([0-9]+(\\.[0-9]+)?|0x[0-9a-fA-F]+|0b[01]+)($|\\s|\"'\\x60|" + regexBoundaries + ")")
+	re = regexp.MustCompile("^([0-9]+(\\.[0-9]+)?|0x[0-9a-fA-F]+|0b[01]+)($|\\s|\"'\\x60|" + regexBoundaries + ")")
 	if match := re.FindString(query); match != "" {
 		return token{
 			tokenValue: match,
@@ -284,7 +284,7 @@ func getNextToken(query string, t token) token {
 	}
 
 	// Boundary
-	re = regexp.MustCompile(regexBoundaries)
+	re = regexp.MustCompile("^" + regexBoundaries)
 	if match := re.FindString(query); match != "" {
 		return token{
 			tokenValue: match,
@@ -390,9 +390,8 @@ func tokenize(query string) (tokens []token) {
 
 		var tokenLength int
 		if cacheKey != "" {
-			var exists bool
-			t, exists = tokenCache[cacheKey]
-			if exists {
+			if cachedToken, exists := tokenCache[cacheKey]; exists {
+				t = cachedToken
 				tokenLength = len(t.tokenValue)
 			}
 		}
