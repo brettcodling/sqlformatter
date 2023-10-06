@@ -5,19 +5,19 @@ import (
 	"strings"
 )
 
-type token struct {
-	tokenValue string
-	tokenType  int
-	index      int
+type Token struct {
+	TokenValue string
+	TokenType  int
+	Index      int
 }
 
-func getNextToken(query string, t token) token {
+func getNextToken(query string, t Token) Token {
 	// Whitespace
 	re := regexp.MustCompile("^\\s+")
 	if match := re.FindString(query); match != "" {
-		return token{
-			tokenValue: match,
-			tokenType:  0,
+		return Token{
+			TokenValue: match,
+			TokenType:  TOKEN_TYPE_WHITESPACE,
 		}
 	}
 
@@ -26,49 +26,49 @@ func getNextToken(query string, t token) token {
 		var last, tokenType int
 		if query[:1] == "#" || query[:1] == "-" {
 			last = strings.Index(query, "\n")
-			tokenType = 8
+			tokenType = TOKEN_TYPE_COMMENT
 		} else {
 			last = strings.Index(query[2:], "*/") + 2
-			tokenType = 9
+			tokenType = TOKEN_TYPE_BLOCK_COMMENT
 		}
 
 		if last == -1 {
 			last = len(query)
 		}
 
-		return token{
-			tokenValue: query[:last],
-			tokenType:  tokenType,
+		return Token{
+			TokenValue: query[:last],
+			TokenType:  tokenType,
 		}
 	}
 
 	// Quoted
 	if query[:1] == "\"" || query[:1] == "'" || query[:1] == "`" || query[:1] == "[" {
-		tokenType := 2
+		tokenType := TOKEN_TYPE_QUOTE
 		if query[:1] == "`" || query[:1] == "[" {
-			tokenType = 3
+			tokenType = TOKEN_TYPE_BACKTICK_QUOTE
 		}
-		return token{
-			tokenValue: getQuotedString(query),
-			tokenType:  tokenType,
+		return Token{
+			TokenValue: getQuotedString(query),
+			TokenType:  tokenType,
 		}
 	}
 
 	// User defined
 	if len(query) > 1 && (query[:1] == "@" || query[:1] == ":") {
-		ret := token{
-			tokenValue: "",
-			tokenType:  12,
+		ret := Token{
+			TokenValue: "",
+			TokenType:  TOKEN_TYPE_VARIABLE,
 		}
 
 		if query[1:2] == "\"" || query[1:2] == "'" || query[1:2] == "`" {
-			ret.tokenValue = query[:1] + getQuotedString(query[1:])
+			ret.TokenValue = query[:1] + getQuotedString(query[1:])
 		} else {
 			re := regexp.MustCompile("^(" + query[:1] + "[a-zA-Z0-9\\._\\$]+)")
-			ret.tokenValue = re.FindString(query)
+			ret.TokenValue = re.FindString(query)
 		}
 
-		if ret.tokenValue != "" {
+		if ret.TokenValue != "" {
 			return ret
 		}
 	}
@@ -76,43 +76,43 @@ func getNextToken(query string, t token) token {
 	// Number
 	re = regexp.MustCompile("^([0-9]+(\\.[0-9]+)?|0x[0-9a-fA-F]+|0b[01]+)($|\\s|\"'\\x60|" + regexBoundaries + ")")
 	if match := re.FindString(query); match != "" {
-		return token{
-			tokenValue: match,
-			tokenType:  10,
+		return Token{
+			TokenValue: match,
+			TokenType:  TOKEN_TYPE_NUMBER,
 		}
 	}
 
 	// Boundary
 	re = regexp.MustCompile("^" + regexBoundaries)
 	if match := re.FindString(query); match != "" {
-		return token{
-			tokenValue: match,
-			tokenType:  7,
+		return Token{
+			TokenValue: match,
+			TokenType:  TOKEN_TYPE_BOUNDARY,
 		}
 	}
 
 	upper := strings.ToUpper(query)
 	// Reserved from prefixed by '.'
-	if t.tokenValue == "" || t.tokenValue != "." {
+	if t.TokenValue == "" || t.TokenValue != "." {
 		re := regexp.MustCompile("^" + regexReservedToplevel + "($|\\s|" + regexBoundaries + ")")
 		if match := re.FindString(upper); match != "" {
-			return token{
-				tokenValue: query[:len(match)],
-				tokenType:  5,
+			return Token{
+				TokenValue: query[:len(match)],
+				TokenType:  TOKEN_TYPE_RESERVED_TOPLEVEL,
 			}
 		}
 		re = regexp.MustCompile("^" + regexReservedNewline + "($|\\s|" + regexBoundaries + ")")
 		if match := re.FindString(upper); match != "" {
-			return token{
-				tokenValue: query[:len(match)],
-				tokenType:  6,
+			return Token{
+				TokenValue: query[:len(match)],
+				TokenType:  TOKEN_TYPE_RESERVED_NEWLINE,
 			}
 		}
 		re = regexp.MustCompile("^" + regexReserved + "($|\\s|" + regexBoundaries + ")")
 		if match := re.FindString(upper); match != "" {
-			return token{
-				tokenValue: query[:len(match)],
-				tokenType:  4,
+			return Token{
+				TokenValue: query[:len(match)],
+				TokenType:  TOKEN_TYPE_RESERVED,
 			}
 		}
 	}
@@ -120,17 +120,17 @@ func getNextToken(query string, t token) token {
 	// Function suffixed by '('
 	re = regexp.MustCompile("^(" + regexReserved + "[(]|\\s|[)])")
 	if match := re.FindString(upper); match != "" {
-		return token{
-			tokenValue: query[:len(match)-1],
-			tokenType:  4,
+		return Token{
+			TokenValue: query[:len(match)-1],
+			TokenType:  TOKEN_TYPE_RESERVED,
 		}
 	}
 
 	// Non reserved
 	re = regexp.MustCompile("^(.*?)($|\\s|[\"'\\x60]|" + regexBoundaries + ")")
-	return token{
-		tokenValue: re.FindString(query),
-		tokenType:  1,
+	return Token{
+		TokenValue: re.FindString(query),
+		TokenType:  TOKEN_TYPE_WORD,
 	}
 }
 
@@ -158,14 +158,14 @@ func joinQuotedRegexp(values []string) string {
 	return "(" + strings.Join(quoted, "|") + ")"
 }
 
-func tokenize(query string) (tokens []token) {
+func Tokenize(query string) (tokens []Token) {
 	initialize()
 
 	origLength := len(query)
 	oldLength := origLength + 1
 	currLength := origLength
 
-	var t token
+	var t Token
 
 	for {
 		if currLength < 1 {
@@ -173,9 +173,9 @@ func tokenize(query string) (tokens []token) {
 		}
 
 		if oldLength <= currLength {
-			tokens = append(tokens, token{
-				tokenValue: query,
-				tokenType:  11,
+			tokens = append(tokens, Token{
+				TokenValue: query,
+				TokenType:  TOKEN_TYPE_ERROR,
 			})
 
 			return
@@ -183,24 +183,24 @@ func tokenize(query string) (tokens []token) {
 		oldLength = currLength
 
 		var cacheKey string
-		if currLength >= 15 {
-			cacheKey = query[0:15]
+		if currLength >= MAX_CACHE_KEY_SIZE {
+			cacheKey = query[:MAX_CACHE_KEY_SIZE]
 		}
 
 		var tokenLength int
 		if cacheKey != "" {
 			if cachedToken, exists := tokenCache[cacheKey]; exists {
 				t = cachedToken
-				tokenLength = len(t.tokenValue)
+				tokenLength = len(t.TokenValue)
 			}
 		}
 		if tokenLength < 1 {
 			t = getNextToken(query, t)
-			tokenLength = len(t.tokenValue)
+			tokenLength = len(t.TokenValue)
 
-			if cacheKey != "" && tokenLength < 15 {
+			if cacheKey != "" && tokenLength < MAX_CACHE_KEY_SIZE {
 				if tokenCache == nil {
-					tokenCache = make(map[string]token)
+					tokenCache = make(map[string]Token)
 				}
 				tokenCache[cacheKey] = t
 			}

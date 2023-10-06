@@ -42,6 +42,7 @@ var (
 		"UPDATEXML", "UPPER", "USER", "UTC_DATE", "UTC_TIME", "UTC_TIMESTAMP", "UUID", "VARIANCE", "VAR_POP",
 		"VAR_SAMP", "VERSION", "WEEK", "WEEKDAY", "WEEKOFYEAR", "WITHIN", "X", "Y", "YEAR", "YEARWEEK",
 	}
+	MAX_CACHE_KEY_SIZE    = 15
 	regexBoundaries       string
 	regexFunction         string
 	regexReserved         string
@@ -92,5 +93,18 @@ var (
 		"SELECT", "FROM", "WHERE", "SET", "ORDER BY", "GROUP BY", "LIMIT", "DROP", "VALUES", "UPDATE", "HAVING", "ADD",
 		"AFTER", "ALTER TABLE", "DELETE FROM", "UNION ALL", "UNION", "EXCEPT", "INTERSECT",
 	}
-	tokenCache map[string]token
+	tokenCache                   map[string]Token
+	TOKEN_TYPE_WHITESPACE        = 0
+	TOKEN_TYPE_WORD              = 1
+	TOKEN_TYPE_QUOTE             = 2
+	TOKEN_TYPE_BACKTICK_QUOTE    = 3
+	TOKEN_TYPE_RESERVED          = 4
+	TOKEN_TYPE_RESERVED_TOPLEVEL = 5
+	TOKEN_TYPE_RESERVED_NEWLINE  = 6
+	TOKEN_TYPE_BOUNDARY          = 7
+	TOKEN_TYPE_COMMENT           = 8
+	TOKEN_TYPE_BLOCK_COMMENT     = 9
+	TOKEN_TYPE_NUMBER            = 10
+	TOKEN_TYPE_ERROR             = 11
+	TOKEN_TYPE_VARIABLE          = 12
 )
