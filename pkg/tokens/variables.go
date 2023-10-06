@@ -1,4 +1,4 @@
-package sqlformatter
+package tokens
 
 var (
 	boundaries = []string{
@@ -94,9 +94,3 @@ var (
 	}
 	tokenCache map[string]token
 )
-
-type token struct {
-	tokenValue string
-	tokenType  int
-	index      int
-}
