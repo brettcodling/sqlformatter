@@ -7,15 +7,35 @@ import (
 	"github.com/brettcodling/sqlformatter/pkg/tokens"
 )
 
-func Format(query string) (formattedQuery string) {
-	var ret string
+const (
+	Indent_type_special = iota
+	Indent_type_block
+)
+
+type formattedQuery struct {
+	output string
+}
+
+func (f *formattedQuery) addNewLine(indent int) {
+	f.output += "\n" + strings.Repeat("\t", indent)
+}
+
+func (f *formattedQuery) append(s string) {
+	f.output += s
+}
+
+func (f *formattedQuery) trimRight() {
+	f.output = strings.TrimRight(f.output, " ")
+}
+
+func Format(query string) string {
+	var formatted formattedQuery
 	var indentLevel, inlineCount int
 	var newline, inlineParanthesis, incSpecIndent, incBlockIndent, addedNewline, inlineIndented, clauseLimit bool
-	var indentTypes []string
+	var indentTypes []int
 	var segments []tokens.Token
-	tab := "\t"
 
-	origSegments := tokens.Tokenize(query)
+	origSegments := tokens.Tokenize(tokens.Query(query))
 
 	for i, t := range origSegments {
 		if t.TokenType != 0 {
@@ -29,45 +49,45 @@ func Format(query string) (formattedQuery string) {
 		if incSpecIndent {
 			indentLevel++
 			incSpecIndent = false
-			indentTypes = append([]string{"special"}, indentTypes...)
+			indentTypes = append([]int{Indent_type_special}, indentTypes...)
 		}
 		if incBlockIndent {
 			indentLevel++
 			incBlockIndent = false
-			indentTypes = append([]string{"block"}, indentTypes...)
+			indentTypes = append([]int{Indent_type_block}, indentTypes...)
 		}
 		if newline {
-			ret += "\n" + strings.Repeat(tab, indentLevel)
+			formatted.addNewLine(indentLevel)
 			newline = false
 			addedNewline = true
 		} else {
 			addedNewline = false
 		}
 
-		if t.TokenType == tokens.TOKEN_TYPE_COMMENT || t.TokenType == tokens.TOKEN_TYPE_BLOCK_COMMENT {
-			if t.TokenType == tokens.TOKEN_TYPE_BLOCK_COMMENT {
-				indent := strings.Repeat(tab, indentLevel)
-				ret += "\n" + indent
+		if t.TokenType == tokens.Token_type_comment || t.TokenType == tokens.Token_type_block_comment {
+			if t.TokenType == tokens.Token_type_block_comment {
+				indent := strings.Repeat("\t", indentLevel)
+				formatted.addNewLine(indentLevel)
 				highlighted = strings.ReplaceAll(highlighted, "\n", "\n"+indent)
 			}
 
-			ret += highlighted
+			formatted.append(highlighted)
 			newline = true
 			continue
 		}
 
 		if inlineParanthesis {
 			if t.TokenValue == ")" {
-				ret = strings.TrimRight(ret, " ")
+				formatted.trimRight()
 
 				if inlineIndented {
 					indentTypes = indentTypes[1:]
 					indentLevel--
-					ret += "\n" + strings.Repeat(tab, indentLevel)
+					formatted.addNewLine(indentLevel)
 				}
 
 				inlineParanthesis = false
-				ret += highlighted + " "
+				formatted.append(highlighted + " ")
 				continue
 			}
 
@@ -100,7 +120,7 @@ func Format(query string) (formattedQuery string) {
 					break
 				}
 
-				if next.TokenType == tokens.TOKEN_TYPE_RESERVED_TOPLEVEL || next.TokenType == tokens.TOKEN_TYPE_RESERVED_NEWLINE || next.TokenType == tokens.TOKEN_TYPE_COMMENT || next.TokenType == tokens.TOKEN_TYPE_BLOCK_COMMENT {
+				if next.TokenType == tokens.Token_type_reserved_toplevel || next.TokenType == tokens.Token_type_reserved_newline || next.TokenType == tokens.Token_type_comment || next.TokenType == tokens.Token_type_block_comment {
 					break
 				}
 
@@ -118,13 +138,13 @@ func Format(query string) (formattedQuery string) {
 				newline = true
 			}
 		} else if t.TokenValue == ")" {
-			ret = strings.TrimRight(ret, " ")
+			formatted.trimRight()
 
 			indentLevel--
 
 			for _, indentType := range indentTypes {
 				indentTypes = indentTypes[1:]
-				if indentType == "special" {
+				if indentType == Indent_type_special {
 					indentLevel--
 				} else {
 					break
@@ -136,21 +156,22 @@ func Format(query string) (formattedQuery string) {
 			}
 
 			if !addedNewline {
-				ret += "\n" + strings.Repeat(tab, indentLevel)
+				formatted.addNewLine(indentLevel)
 			}
-		} else if t.TokenType == tokens.TOKEN_TYPE_RESERVED_TOPLEVEL {
+		} else if t.TokenType == tokens.Token_type_reserved_toplevel {
 			incSpecIndent = true
 
-			if len(indentTypes) > 0 && indentTypes[0] == "special" {
+			if len(indentTypes) > 0 && indentTypes[0] == Indent_type_special {
 				indentLevel--
 				indentTypes = indentTypes[1:]
 			}
 
 			newline = true
 			if !addedNewline {
-				ret += "\n" + strings.Repeat(tab, indentLevel)
+				formatted.addNewLine(indentLevel)
 			} else {
-				ret = strings.TrimRight(ret, tab) + strings.Repeat(tab, indentLevel)
+				formatted.trimRight()
+				formatted.append(strings.Repeat("\t", indentLevel))
 			}
 
 			if strings.Contains(t.TokenValue, " ") || strings.Contains(t.TokenValue, "\n") || strings.Contains(t.TokenValue, "\t") {
@@ -161,7 +182,7 @@ func Format(query string) (formattedQuery string) {
 			if t.TokenValue == "LIMIT" && !inlineParanthesis {
 				clauseLimit = true
 			}
-		} else if clauseLimit && t.TokenValue != "," && t.TokenType != tokens.TOKEN_TYPE_NUMBER && t.TokenType != tokens.TOKEN_TYPE_WHITESPACE {
+		} else if clauseLimit && t.TokenValue != "," && t.TokenType != tokens.Token_type_number && t.TokenType != tokens.Token_type_whitespace {
 			clauseLimit = false
 		} else if t.TokenValue == "," && !inlineParanthesis {
 			if clauseLimit {
@@ -170,9 +191,9 @@ func Format(query string) (formattedQuery string) {
 			} else {
 				newline = true
 			}
-		} else if t.TokenType == tokens.TOKEN_TYPE_RESERVED_NEWLINE {
+		} else if t.TokenType == tokens.Token_type_reserved_newline {
 			if !addedNewline {
-				ret += "\n" + strings.Repeat(tab, indentLevel)
+				formatted.addNewLine(indentLevel)
 			}
 
 			if strings.Contains(t.TokenValue, " ") || strings.Contains(t.TokenValue, "\n") || strings.Contains(t.TokenValue, "\t") {
@@ -182,13 +203,13 @@ func Format(query string) (formattedQuery string) {
 		}
 
 		if t.TokenValue == "." || t.TokenValue == "," || t.TokenValue == ";" {
-			ret = strings.TrimRight(ret, " ")
+			formatted.trimRight()
 		}
 
-		ret += highlighted
-		lastChar := ret[len(ret)-1:]
+		formatted.append(highlighted)
+		lastChar := formatted.output[len(formatted.output)-1:]
 		if lastChar != " " && lastChar != "." {
-			ret += " "
+			formatted.append(" ")
 		}
 
 		if lastChar == "(" {
@@ -196,19 +217,19 @@ func Format(query string) (formattedQuery string) {
 		}
 
 		if t.TokenValue == "(" || t.TokenValue == "." {
-			ret = strings.TrimRight(ret, " ")
+			formatted.trimRight()
 		}
 
-		if t.TokenValue == "-" && len(segments) >= i && segments[i+1].TokenType == tokens.TOKEN_TYPE_NUMBER && i-1 >= 0 {
+		if t.TokenValue == "-" && len(segments) >= i && segments[i+1].TokenType == tokens.Token_type_number && i-1 >= 0 {
 			prev := segments[i-1].TokenType
-			if prev != tokens.TOKEN_TYPE_QUOTE &&
-				prev != tokens.TOKEN_TYPE_BACKTICK_QUOTE &&
-				prev != tokens.TOKEN_TYPE_WORD &&
-				prev != tokens.TOKEN_TYPE_NUMBER {
-				ret = strings.TrimRight(ret, " ")
+			if prev != tokens.Token_type_quote &&
+				prev != tokens.Token_type_backtick_quote &&
+				prev != tokens.Token_type_word &&
+				prev != tokens.Token_type_number {
+				formatted.trimRight()
 			}
 		}
 	}
 
-	return ret
+	return formatted.output
 }
