@@ -168,7 +168,9 @@ func Format(query string) string {
 
 			newline = true
 			if !addedNewline {
-				formatted.addNewLine(indentLevel)
+				if i != 0 {
+					formatted.addNewLine(indentLevel)
+				}
 			} else {
 				formatted.trimRight()
 				formatted.append(strings.Repeat("\t", indentLevel))
